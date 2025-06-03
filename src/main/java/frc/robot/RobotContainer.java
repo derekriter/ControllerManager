@@ -4,7 +4,14 @@
 
 package frc.robot;
 
+import edu.wpi.first.wpilibj.DriverStation;
+import frc.robot.controllers.ControllerManager;
+
 public class RobotContainer {
     
-    public RobotContainer() {}
+    public RobotContainer() {
+        DriverStation.silenceJoystickConnectionWarning(true);
+        ControllerManager.createController(0); //driver 1
+        ControllerManager.createController(1); //driver 2
+    }
 }
