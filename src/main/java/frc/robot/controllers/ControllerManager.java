@@ -7,6 +7,9 @@ import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.GenericHID;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 
+/**
+ * A utility to handle the finer details of controller input for you. This is an abstract class, all available functions are called statically
+ */
 public abstract class ControllerManager {
     
     /**
@@ -30,11 +33,11 @@ public abstract class ControllerManager {
      */
     public static void createController(int id) {
         if(controllers.containsKey(id)) {
-            DriverStation.reportError(String.format("Cannot create multiple controllers with id %d", id), false);
+            DriverStation.reportError(String.format("Cannot create multiple controllers with id %d", id), true);
             return;
         }
         if(id < 0) {
-            DriverStation.reportError("Cannot create a controller with negative id", false);
+            DriverStation.reportError("Cannot create a controller with negative id", true);
             return;
         }
         if(id > 5) {
@@ -51,9 +54,14 @@ public abstract class ControllerManager {
      * @param hid
      */
     public static void addController(GenericHID hid) {
+        if(hid == null) {
+            DriverStation.reportError("Cannot create a controller from a null HID device", true);
+            return;
+        }
+        
         int id = hid.getPort();
         if(controllers.containsKey(id)) {
-            DriverStation.reportError(String.format("Cannot create multiple controllers with id %d", id), false);
+            DriverStation.reportError(String.format("Cannot create multiple controllers with id %d", id), true);
             return;
         }
         
@@ -63,7 +71,7 @@ public abstract class ControllerManager {
         controllers.put(id, c);
     }
     /**
-     * Critical to call in robotPeriodic
+     * Critical to call in {@link frc.robot.Robot#robotPeriodic() robotPeriodic}
      */
     public static void periodic() {
         forceClearBuffers();
@@ -107,7 +115,7 @@ public abstract class ControllerManager {
         return true;
     }
     /*
-     * https://www.desmos.com/calculator/xwmslpzd1a
+     * https://www.desmos.com/calculator/07bcdud2oy
      */
     public static double applyLinearDeadzone(double val, double deadzone) {
         if(-deadzone <= val && val <= deadzone) return 0;
@@ -115,16 +123,27 @@ public abstract class ControllerManager {
         return (val - (val > 0 ? deadzone : -deadzone)) / (1 - deadzone);
     }
     /*
-     * https://www.desmos.com/calculator/xwmslpzd1a
+     * https://www.desmos.com/calculator/07bcdud2oy
      */
     public static double applyExponentialDeadzone(double val, double deadzone, double power) {
         if(-deadzone <= val && val <= deadzone) return 0;
         
         return Math.pow(Math.abs((val - (val > 0 ? deadzone : -deadzone)) / (1 - deadzone)), power) * (val < 0 ? -1 : 1);
     }
+    private static boolean getPOVCheck(int controller) {
+        if(!controllers.containsKey(controller)) {
+            DriverStation.reportWarning(String.format("No controller with id %d has been registered", controller), false);
+            return false;
+        }
+        
+        return true;
+    }
     
     /*
      * Setters
+     */
+    /**
+     * Forceable clear the input buffers. Doing so will cause the input to be requeried next time an input function is called. This is already called by {@link frc.robot.controllers.ControllerManager#periodic() periodic}. This should not need to be called manually under normal circumstances
      */
     public static void forceClearBuffers() {
         for(Controller c : controllers.values()) {
@@ -134,6 +153,12 @@ public abstract class ControllerManager {
             c.axisBuffer.clear();
         }
     }
+    /**
+     * Configure the deadzone for the given controller and axis. This deadzone is used when calling {@link frc.robot.controllers.ControllerManager#getAxisLinear getAxisLinear} and {@link frc.robot.controllers.ControllerManager#getAxisExponential(int, int, double) getAxisExponential}
+     * @param controller ID of registered controller
+     * @param axis ID of controller axis, starting at 0
+     * @param deadzone The range in which if the absolute value of the axis is <= the deadzone, then it will equal 0
+     */
     public static void setControllerAxisDeadzone(int controller, int axis, double deadzone) {
         if(!controllers.containsKey(controller)) {
             DriverStation.reportError(String.format("No controller with id %d has been registered", controller), false);
@@ -153,6 +178,26 @@ public abstract class ControllerManager {
     /*
      * Getters
      */
+    /**
+     * Get the interal HID device for the given controller
+     * @param controller
+     * @return Will return null if the given controller doesn't exist
+     */
+    public static GenericHID getHID(int controller) {
+        if(!controllers.containsKey(controller)) {
+            DriverStation.reportWarning(String.format("No controller with id %d has been registered", controller), false);
+            return null;
+        }
+        
+        return controllers.get(controller).hid;
+    }
+    
+    /**
+     * Get whether a button is currently pressed or not
+     * @param controller ID of the registered controller
+     * @param button ID of the controller button, starting at 1
+     * @return Will return false if the given controller or button doesn't exist
+     */
     public static boolean getButton(int controller, int button) {
         if(!getButtonCheck(controller, button)) return false;
         
@@ -165,6 +210,12 @@ public abstract class ControllerManager {
         c.buttonBuffer.put(button, val);
         return val;
     }
+    /**
+     * Get whether a button is currently pressed but was not the previous frame
+     * @param controller ID of the registered controller
+     * @param button ID of the controller button, starting at 1
+     * @return Will return false if the given controller or button doesn't exist
+     */
     public static boolean getButtonPressed(int controller, int button) {
         if(!getButtonCheck(controller, button)) return false;
         
@@ -177,6 +228,12 @@ public abstract class ControllerManager {
         c.buttonPressedBuffer.put(button, val);
         return val;
     }
+    /**
+     * Get whether a button is currently <b>not</b> pressed but was the previous frame
+     * @param controller ID of the registered controller
+     * @param button ID of the controller button, starting at 1
+     * @return Will return false if the given controller or button doesn't exist
+     */
     public static boolean getButtonReleased(int controller, int button) {
         if(!getButtonCheck(controller, button)) return false;
         
@@ -192,8 +249,8 @@ public abstract class ControllerManager {
     /**
      * Get a trigger that tracks the value of getButton. Do not use this function to get the value of a button. Use getButton for that.
      * @param controller ID of the registered controller
-     * @param button ID of the controller button, starting at 0
-     * @return Will return an axis that will always evaluate to false if the given controller or button doesn't exist
+     * @param button ID of the controller button, starting at 1
+     * @return Will return a Trigger that will always evaluate to false if the given controller or button doesn't exist
      * @see https://github.com/wpilibsuite/allwpilib/issues/5903
      */
     public static Trigger getButtonTrigger(int controller, int button) {
@@ -206,7 +263,7 @@ public abstract class ControllerManager {
     /**
      * Get the axis value without applying deadzone configurations
      * @param controller ID of registered controller
-     * @param axis ID of controller axis, starting at 1
+     * @param axis ID of controller axis, starting at 0
      * @return Will return 0 if the given controller or axis doesn't exist
      */
     public static double getAxisRaw(int controller, int axis) {
@@ -224,7 +281,7 @@ public abstract class ControllerManager {
     /**
      * Get the axis value with the configured axis deadzone
      * @param controller ID of registered controller
-     * @param axis ID of controller axis, starting at 1
+     * @param axis ID of controller axis, starting at 0
      * @return Will return 0 if the given controller or axis doesn't exist
      * @see https://www.desmos.com/calculator/07bcdud2oy
      */
@@ -244,7 +301,7 @@ public abstract class ControllerManager {
     /**
      * Get the axis value with the configured axis deadzone and apply an exponential curve to it
      * @param controller ID of registered controller
-     * @param axis ID of controller axis, starting at 1
+     * @param axis ID of controller axis, starting at 0
      * @param power What power of exponential curve to apply. See variable <i>s</i> in the example graph
      * @return Will return 0 if the given controller or axis doesn't exist
      * @see https://www.desmos.com/calculator/07bcdud2oy
@@ -265,5 +322,16 @@ public abstract class ControllerManager {
         double val = c.hid.getRawAxis(axis);
         c.axisBuffer.put(axis, val);
         return applyExponentialDeadzone(val, deadzone, power);
+    }
+    /**
+     * Get if the raw axis value is greater than the given value
+     * @param controller ID of the registered controller
+     * @param axis ID of the controller axis, starting at 0
+     * @param val Discriminating value
+     * @return Will return 0 if the given controller or axis doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getAxisRaw getAxisRaw
+     */
+    public static boolean getAxisRawGreaterThan(int controller, int axis, double val) {
+        return getAxisRaw(controller, axis) > val;
     }
 }
