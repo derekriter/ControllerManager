@@ -247,7 +247,7 @@ public abstract class ControllerManager {
         return val;
     }
     /**
-     * Get a trigger that tracks the value of getButton. Do not use this function to get the value of a button. Use getButton for that.
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getButton getButton}. Do not use this function to get the value of a button. Use {@link frc.robot.controllers.ControllerManager#getButton getButton} for that.
      * @param controller ID of the registered controller
      * @param button ID of the controller button, starting at 1
      * @return Will return a Trigger that will always evaluate to false if the given controller or button doesn't exist
@@ -328,10 +328,151 @@ public abstract class ControllerManager {
      * @param controller ID of the registered controller
      * @param axis ID of the controller axis, starting at 0
      * @param val Discriminating value
-     * @return Will return 0 if the given controller or axis doesn't exist
+     * @return Will return false if the given controller or axis doesn't exist
      * @see frc.robot.controllers.ControllerManager#getAxisRaw getAxisRaw
      */
     public static boolean getAxisRawGreaterThan(int controller, int axis, double val) {
         return getAxisRaw(controller, axis) > val;
+    }
+    /**
+     * Get if the raw axis value is less than the given value
+     * @param controller ID of the registered controller
+     * @param axis ID of the controller axis, starting at 0
+     * @param val Discriminating value
+     * @return Will return false if the given controller or axis doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getAxisRaw getAxisRaw
+     */
+    public static boolean getAxisRawLessThan(int controller, int axis, double val) {
+        if(!getAxisCheck(controller, axis)) return false;
+        
+        return getAxisRaw(controller, axis) < val;
+    }
+    /**
+     * Get if the linearly calibrated axis value is greater than the given value
+     * @param controller ID of the registered controller
+     * @param axis ID of the controller axis, starting at 0
+     * @param val Discriminating value
+     * @return Will return false if the given controller or axis doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getAxisLinear getAxisLinear
+     */
+    public static boolean getAxisLinearGreaterThan(int controller, int axis, double val) {
+        return getAxisLinear(controller, axis) > val;
+    }
+    /**
+     * Get if the linearly calibrated axis value is less than the given value
+     * @param controller ID of the registered controller
+     * @param axis ID of the controller axis, starting at 0
+     * @param val Discriminating value
+     * @return Will return false if the given controller or axis doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getAxisLinear getAxisLinear
+     */
+    public static boolean getAxisLinearLessThan(int controller, int axis, double val) {
+        if(!getAxisCheck(controller, axis)) return false;
+        
+        return getAxisLinear(controller, axis) < val;
+    }
+    /**
+     * Get if the exponentially calibrated axis value is greater than the given value
+     * @param controller ID of the registered controller
+     * @param axis ID of the controller axis, starting at 0
+     * @param power What power of exponential curve to apply
+     * @param val Discriminating value
+     * @return Will return false if the given controller or axis doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getAxisExponential getAxisExponential
+     */
+    public static boolean getAxisExponentialGreaterThan(int controller, int axis, double power, double val) {
+        return getAxisExponential(controller, axis, power) > val;
+    }
+    /**
+     * Get if the linearly calibrated axis value is less than the given value
+     * @param controller ID of the registered controller
+     * @param axis ID of the controller axis, starting at 0
+     * @param power What power of exponential curve to apply
+     * @param val Discriminating value
+     * @return Will return false if the given controller or axis doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getAxisExponential getAxisExponential
+     */
+    public static boolean getAxisExponentialLessThan(int controller, int axis, double power, double val) {
+        if(!getAxisCheck(controller, axis)) return false;
+        
+        return getAxisExponential(controller, axis, power) < val;
+    }
+    /**
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getAxisRawGreaterThan getAxisRawGreaterThan}
+     * @param controller ID of the registered controller
+     * @param axis ID of the controller axis, starting at 0
+     * @param val Discriminating value
+     * @return Will return a Trigger that will always evaluate to false if the given controller or axis doesn't exist
+     */
+    public static Trigger getAxisRawGreaterThanTrigger(int controller, int axis, double val) {
+        if(!getAxisCheck(controller, axis)) return new Trigger(() -> false);
+        
+        return new Trigger(() -> controllers.get(controller).hid.getRawAxis(axis) > val);
+    }
+    /**
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getAxisRawLessThan getAxisRawLessThan}
+     * @param controller ID of the registered controller
+     * @param axis ID of the controller axis, starting at 0
+     * @param val Discriminating value
+     * @return Will return a Trigger that will always evaluate to false if the given controller or axis doesn't exist
+     */
+    public static Trigger getAxisRawLessThanTrigger(int controller, int axis, double val) {
+        if(!getAxisCheck(controller, axis)) return new Trigger(() -> false);
+        
+        return new Trigger(() -> controllers.get(controller).hid.getRawAxis(axis) < val);
+    }
+    /**
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getAxisLinearGreaterThan getAxisLinearGreaterThan}
+     * @param controller ID of the registered controller
+     * @param axis ID of the controller axis, starting at 0
+     * @param val Discriminating value
+     * @return Will return a Trigger that will always evaluate to false if the given controller or axis doesn't exist
+     */
+    public static Trigger getAxisLinearGreaterThanTrigger(int controller, int axis, double val) {
+        if(!getAxisCheck(controller, axis)) return new Trigger(() -> false);
+        
+        double deadzone = controllers.get(controller).axisDeadzones.getOrDefault(controller, 0d);
+        return new Trigger(() -> applyLinearDeadzone(controllers.get(controller).hid.getRawAxis(axis), deadzone) > val);
+    }
+    /**
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getAxisLinearLessThan getAxisLinearLessThan}
+     * @param controller ID of the registered controller
+     * @param axis ID of the controller axis, starting at 0
+     * @param val Discriminating value
+     * @return Will return a Trigger that will always evaluate to false if the given controller or axis doesn't exist
+     */
+    public static Trigger getAxisLinearLessThanTrigger(int controller, int axis, double val) {
+        if(!getAxisCheck(controller, axis)) return new Trigger(() -> false);
+        
+        double deadzone = controllers.get(controller).axisDeadzones.getOrDefault(controller, 0d);
+        return new Trigger(() -> applyLinearDeadzone(controllers.get(controller).hid.getRawAxis(axis), deadzone) < val);
+    }
+    /**
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getAxisExponentialGreaterThan getAxisExponentialGreaterThan}
+     * @param controller ID of the registered controller
+     * @param axis ID of the controller axis, starting at 0
+     * @param power What power of exponential curve to apply
+     * @param val Discriminating value
+     * @return Will return a Trigger that will always evaluate to false if the given controller or axis doesn't exist
+     */
+    public static Trigger getAxisExponentialGreaterThanTrigger(int controller, int axis, double power, double val) {
+        if(!getAxisCheck(controller, axis)) return new Trigger(() -> false);
+        
+        double deadzone = controllers.get(controller).axisDeadzones.getOrDefault(controller, 0d);
+        return new Trigger(() -> applyExponentialDeadzone(controllers.get(controller).hid.getRawAxis(axis), deadzone, power) > val);
+    }
+    /**
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getAxisExponentialLessThan getAxisExponentialLessThan}
+     * @param controller ID of the registered controller
+     * @param axis ID of the controller axis, starting at 0
+     * @param power What power of exponential curve to apply
+     * @param val Discriminating value
+     * @return Will return a Trigger that will always evaluate to false if the given controller or axis doesn't exist
+     */
+    public static Trigger getAxisExponentialLessThanTrigger(int controller, int axis, double power, double val) {
+        if(!getAxisCheck(controller, axis)) return new Trigger(() -> false);
+        
+        double deadzone = controllers.get(controller).axisDeadzones.getOrDefault(controller, 0d);
+        return new Trigger(() -> applyExponentialDeadzone(controllers.get(controller).hid.getRawAxis(axis), deadzone, power) < val);
     }
 }
