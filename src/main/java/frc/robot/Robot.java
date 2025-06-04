@@ -6,20 +6,22 @@ package frc.robot;
 
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
-import frc.robot.controllers.ControllerManager;
 
 public class Robot extends TimedRobot {
+    
+    public static Robot instance;
     
     private final RobotContainer robotContainer;
     
     public Robot() {
+        instance = this;
+        
         robotContainer = new RobotContainer();
     }
     
     @Override
     public void robotPeriodic() {
         CommandScheduler.getInstance().run();
-        ControllerManager.periodic();
     }
     
     @Override

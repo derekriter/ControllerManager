@@ -10,6 +10,7 @@ import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.GenericHID;
 import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
+import frc.robot.Robot;
 
 /*
  * TODO Redo logging to have verbosity config and be more detailed -> break out into logging helper class
@@ -50,6 +51,7 @@ public abstract class ControllerManager {
     }
     
     private static Map<Integer, Controller> controllers = new HashMap<>();
+    private static boolean hasInited = false;
     
     /**
      * Create and register a HID device
@@ -67,6 +69,8 @@ public abstract class ControllerManager {
         if(id > 5) {
             DriverStation.reportWarning(String.format("The driver station only supports controller ids 0-5, id %d will be inaccessible", id), false);
         }
+        
+        if(!hasInited) init();
         
         Controller c = new Controller();
         c.hid = new GenericHID(id);
@@ -92,25 +96,29 @@ public abstract class ControllerManager {
             return;
         }
         
+        if(!hasInited) init();
+        
         Controller c= new Controller();
         c.hid = hid;
         
         controllers.put(id, c);
     }
-    //TODO Figure out if you can schedule your own periodic loop so the user doesn't have to call periodic manually
-    /**
-     * Critical to call in {@link frc.robot.Robot#robotPeriodic() robotPeriodic}
+    
+    /*
+     * Internal tools
      */
-    public static void periodic() {
+    private static void init() {
+        hasInited = true;
+        
+        //run periodic at 50 Hz, same cycle as robotPeriodic
+        Robot.instance.addPeriodic(ControllerManager::periodic, Robot.kDefaultPeriod);
+    }
+    private static void periodic() {
         for(int i = 0; i < controllers.values().size(); i++) {
             forceClearBuffers(i);
             updateRumble(i);
         }
     }
-    
-    /*
-     * Internal tools
-     */
     private static boolean buttonCheck(int controller, int button) {
         if(!controllers.containsKey(controller)) {
             DriverStation.reportWarning(String.format("No controller with id %d has been registered", controller), false);
