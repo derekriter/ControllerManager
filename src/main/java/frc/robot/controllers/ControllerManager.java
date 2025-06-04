@@ -1,13 +1,21 @@
 package frc.robot.controllers;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.GenericHID;
+import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 
+/*
+ * TODO Redo logging to have verbosity config and be more detailed -> break out into logging helper class
+ * TODO Add controller binding constants -> Possibly rewrite to use controller classes rather than just one big abstract class
+ * TODO Review documentation for errors, Javadocs on github?
+ */
 /**
  * A utility to handle the finer details of controller input for you. This is an abstract class, all available functions are called statically
  */
@@ -38,6 +46,7 @@ public abstract class ControllerManager {
         public RumbleType type;
         public double strength;
         public double duration;
+        public Timer timer;
     }
     
     private static Map<Integer, Controller> controllers = new HashMap<>();
@@ -62,6 +71,9 @@ public abstract class ControllerManager {
         Controller c = new Controller();
         c.hid = new GenericHID(id);
         
+        //reset rumbles just in case
+        c.hid.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 0);
+        
         controllers.put(id, c);
     }
     /**
@@ -85,6 +97,7 @@ public abstract class ControllerManager {
         
         controllers.put(id, c);
     }
+    //TODO Figure out if you can schedule your own periodic loop so the user doesn't have to call periodic manually
     /**
      * Critical to call in {@link frc.robot.Robot#robotPeriodic() robotPeriodic}
      */
@@ -155,6 +168,50 @@ public abstract class ControllerManager {
         }
         
         return true;
+    }
+    private static void updateRumble(int controller) {
+        //don't bother with controller validity checks since this only being used internally
+        
+        Controller c = controllers.get(controller);
+        List<Integer> toRemove = new ArrayList<>();
+        double newLeftMax = 0;
+        double newRightMax = 0;
+        for(int id : c.rumbles.keySet()) {
+            Rumble r = c.rumbles.get(id);
+            
+            if(r.timer.hasElapsed(r.duration)) {
+                toRemove.add(id); //remove from map after loop is over to avoid undefined behaviour
+                continue;
+            }
+            
+            switch(r.type) {
+                case LEFT:
+                    newLeftMax = Math.max(newLeftMax, r.strength);
+                    break;
+                case RIGHT:
+                    newRightMax = Math.max(newRightMax, r.strength);
+                    break;
+                case BOTH:
+                    newLeftMax = Math.max(newLeftMax, r.strength);
+                    newRightMax = Math.max(newRightMax, r.strength);
+                    break;
+            }
+        }
+        /*
+         * From documentation on Map.keySet():
+         * The set supports element removal, which removes the corresponding mapping from the map, via the Iterator.remove, Set.remove, removeAll, retainAll, and clear operations.
+         */
+        c.rumbles.keySet().removeAll(toRemove);
+        
+        //only send update to controller if necessary
+        if(newLeftMax != c.leftMax) {
+            c.leftMax = newLeftMax;
+            c.hid.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kLeftRumble, c.leftMax);
+        }
+        if(newRightMax != c.leftMax) {
+            c.rightMax = newRightMax;
+            c.hid.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kRightRumble, c.rightMax);
+        }
     }
     
     /*
@@ -714,8 +771,8 @@ public abstract class ControllerManager {
         Controller c = controllers.get(controller);
         
         //probably could be better but it works
-        //will get super slow if a ton of rumbles are active
-        //also will break if 2147483647 rumbles are already active
+        //will get super slow if a ton of rumbles are active -> TODO add a limit on how many rumbles can be active at a time per controller, how to handle limit (either cancel old rumbles or cancel incoming)
+        //also will break if 2147483647 rumbles are already active when scheduling a new one
         int id;
         do {
             id = (int) (Math.random() * Integer.MAX_VALUE);
@@ -726,6 +783,8 @@ public abstract class ControllerManager {
         r.type = type;
         r.strength = strength;
         r.duration = duration;
+        r.timer = new Timer();
+        r.timer.start();
         
         c.rumbles.put(id, r);
         
