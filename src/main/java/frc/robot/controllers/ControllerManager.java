@@ -15,7 +15,7 @@ import frc.robot.Robot;
 /*
  * TODO Redo logging to have verbosity config and be more detailed -> break out into logging helper class
  * TODO Add controller binding constants -> Possibly rewrite to use controller classes rather than just one big abstract class
- * TODO Review documentation for errors, Javadocs on github?
+ * TODO Javadocs on github?
  */
 /**
  * A utility to handle the finer details of controller input for you. This is an abstract class, all available functions are called statically
@@ -76,12 +76,8 @@ public abstract class ControllerManager {
             DriverStation.reportError(String.format("Cannot register multiple controllers with id %d", id), true);
             return;
         }
-        if(id < 0) {
-            DriverStation.reportError("Cannot create a controller with negative id", true);
-            return;
-        }
-        if(id > 5) {
-            DriverStation.reportWarning(String.format("The driver station only supports controller ids 0-5, id %d will be inaccessible", id), false);
+        if(id < 0 || id > 5) {
+            DriverStation.reportWarning(String.format("The driver station only supports controller ids in the range of [0, 5], id %d will be inaccessible", id), false);
         }
         
         if(!hasInited) init();
@@ -96,7 +92,7 @@ public abstract class ControllerManager {
     }
     /**
      * Register an already created HID device
-     * @param hid
+     * @param hid An initialized GenericHID
      */
     public static void addController(GenericHID hid) {
         if(hid == null) {
@@ -243,7 +239,7 @@ public abstract class ControllerManager {
      * Setters
      */
     /**
-     * Forceable clear the input buffers of the given controller. Doing so will cause the input to be requeried next time an input function is called. This is already called by {@link frc.robot.controllers.ControllerManager#periodic() periodic}. This should not need to be called manually under normal circumstances
+     * Forceably clear the input buffers of the given controller. Doing so will cause the input to be requeried next time an input function is called. This is already called in a 50 Hz periodic loop. This should not need to be called manually under normal circumstances
      * @param controller ID of registered controller
      */
     public static void forceClearBuffers(int controller) {
@@ -260,10 +256,12 @@ public abstract class ControllerManager {
         c.povBuffer = -2;
     }
     /**
-     * Configure the deadzone for the given controller and axis. This deadzone is used when calling {@link frc.robot.controllers.ControllerManager#getAxisLinear getAxisLinear} and {@link frc.robot.controllers.ControllerManager#getAxisExponential(int, int, double) getAxisExponential}
+     * Configure the deadzone for the given controller and axis. This deadzone is used when calling {@link frc.robot.controllers.ControllerManager#getAxisLinear} and {@link frc.robot.controllers.ControllerManager#getAxisExponential}
      * @param controller ID of registered controller
      * @param axis ID of controller axis, starting at 0
-     * @param deadzone The range in which if the absolute value of the axis is <= the deadzone, then it will equal 0. This value is clamped to the range [0, 1]
+     * @param deadzone The range in which if the absolute value of the axis is <= the deadzone, then the axis will evaluate to 0. This value is clamped to the range [0, 1]
+     * @see frc.robot.controllers.ControllerManager#getAxisLinear
+     * @see frc.robot.controllers.ControllerManager#getAxisExponential
      */
     public static void setControllerAxisDeadzone(int controller, int axis, double deadzone) {
         if(!controllers.containsKey(controller)) {
@@ -289,12 +287,12 @@ public abstract class ControllerManager {
      */
     /**
      * Get the interal HID device for the given controller
-     * @param controller
+     * @param controller ID of registered controller
      * @return Will return null if the given controller doesn't exist
      */
     public static GenericHID getHID(int controller) {
         if(!controllers.containsKey(controller)) {
-            DriverStation.reportWarning(String.format("No controller with id %d has been registered", controller), false);
+            DriverStation.reportError(String.format("No controller with id %d has been registered", controller), false);
             return null;
         }
         
@@ -364,11 +362,12 @@ public abstract class ControllerManager {
         return val;
     }
     /**
-     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getButton getButton}. Do not use this function to get the value of a button. Use {@link frc.robot.controllers.ControllerManager#getButton getButton} for that.
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getButton}. Do not use this function to get the value of a button. Use {@link frc.robot.controllers.ControllerManager#getButton} for that.
      * @param controller ID of the registered controller
      * @param button ID of the controller button, starting at 1
      * @return Will return a Trigger that will always evaluate to false if the given controller or button doesn't exist
      * @see https://github.com/wpilibsuite/allwpilib/issues/5903
+     * @see frc.robot.controllers.ControllerManager#getButton
      */
     public static Trigger getButtonTrigger(int controller, int button) {
         if(!buttonCheck(controller, button)) return new Trigger(() -> false);
@@ -401,6 +400,7 @@ public abstract class ControllerManager {
      * @param axis ID of controller axis, starting at 0
      * @return Will return 0 if the given controller or axis doesn't exist
      * @see https://www.desmos.com/calculator/07bcdud2oy
+     * @see frc.robot.controllers.ControllerManager#setControllerAxisDeadzone
      */
     public static double getAxisLinear(int controller, int axis) {
         if(!axisCheck(controller, axis)) return 0;
@@ -422,6 +422,7 @@ public abstract class ControllerManager {
      * @param power What power of exponent to apply. Will be clamped to the range [0, ∞) See variable <i>s</i> in the example graph
      * @return Will return 0 if the given controller or axis doesn't exist
      * @see https://www.desmos.com/calculator/07bcdud2oy
+     * @see frc.robot.controllers.ControllerManager#setControllerAxisDeadzone
      */
     public static double getAxisExponential(int controller, int axis, double power) {
         if(!axisCheck(controller, axis)) return 0;
@@ -443,7 +444,7 @@ public abstract class ControllerManager {
      * @param axis ID of the controller axis, starting at 0
      * @param val Discriminating value
      * @return Will return false if the given controller or axis doesn't exist
-     * @see frc.robot.controllers.ControllerManager#getAxisRaw getAxisRaw
+     * @see frc.robot.controllers.ControllerManager#getAxisRaw
      */
     public static boolean getAxisRawGreaterThan(int controller, int axis, double val) {
         return getAxisRaw(controller, axis) > val;
@@ -454,7 +455,7 @@ public abstract class ControllerManager {
      * @param axis ID of the controller axis, starting at 0
      * @param val Discriminating value
      * @return Will return false if the given controller or axis doesn't exist
-     * @see frc.robot.controllers.ControllerManager#getAxisRaw getAxisRaw
+     * @see frc.robot.controllers.ControllerManager#getAxisRaw
      */
     public static boolean getAxisRawLessThan(int controller, int axis, double val) {
         if(!axisCheck(controller, axis)) return false;
@@ -467,7 +468,7 @@ public abstract class ControllerManager {
      * @param axis ID of the controller axis, starting at 0
      * @param val Discriminating value
      * @return Will return false if the given controller or axis doesn't exist
-     * @see frc.robot.controllers.ControllerManager#getAxisLinear getAxisLinear
+     * @see frc.robot.controllers.ControllerManager#getAxisLinear
      */
     public static boolean getAxisLinearGreaterThan(int controller, int axis, double val) {
         return getAxisLinear(controller, axis) > val;
@@ -478,7 +479,7 @@ public abstract class ControllerManager {
      * @param axis ID of the controller axis, starting at 0
      * @param val Discriminating value
      * @return Will return false if the given controller or axis doesn't exist
-     * @see frc.robot.controllers.ControllerManager#getAxisLinear getAxisLinear
+     * @see frc.robot.controllers.ControllerManager#getAxisLinear
      */
     public static boolean getAxisLinearLessThan(int controller, int axis, double val) {
         if(!axisCheck(controller, axis)) return false;
@@ -492,7 +493,7 @@ public abstract class ControllerManager {
      * @param power What power of exponential curve to apply
      * @param val Discriminating value
      * @return Will return false if the given controller or axis doesn't exist
-     * @see frc.robot.controllers.ControllerManager#getAxisExponential getAxisExponential
+     * @see frc.robot.controllers.ControllerManager#getAxisExponential
      */
     public static boolean getAxisExponentialGreaterThan(int controller, int axis, double power, double val) {
         return getAxisExponential(controller, axis, power) > val;
@@ -504,7 +505,7 @@ public abstract class ControllerManager {
      * @param power What power of exponential curve to apply
      * @param val Discriminating value
      * @return Will return false if the given controller or axis doesn't exist
-     * @see frc.robot.controllers.ControllerManager#getAxisExponential getAxisExponential
+     * @see frc.robot.controllers.ControllerManager#getAxisExponential
      */
     public static boolean getAxisExponentialLessThan(int controller, int axis, double power, double val) {
         if(!axisCheck(controller, axis)) return false;
@@ -512,11 +513,12 @@ public abstract class ControllerManager {
         return getAxisExponential(controller, axis, power) < val;
     }
     /**
-     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getAxisRawGreaterThan getAxisRawGreaterThan}
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getAxisRawGreaterThan}
      * @param controller ID of the registered controller
      * @param axis ID of the controller axis, starting at 0
      * @param val Discriminating value
      * @return Will return a Trigger that will always evaluate to false if the given controller or axis doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getAxisRawGreaterThan
      */
     public static Trigger getAxisRawGreaterThanTrigger(int controller, int axis, double val) {
         if(!axisCheck(controller, axis)) return new Trigger(() -> false);
@@ -524,11 +526,12 @@ public abstract class ControllerManager {
         return new Trigger(() -> controllers.get(controller).hid.getRawAxis(axis) > val);
     }
     /**
-     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getAxisRawLessThan getAxisRawLessThan}
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getAxisRawLessThan}
      * @param controller ID of the registered controller
      * @param axis ID of the controller axis, starting at 0
      * @param val Discriminating value
      * @return Will return a Trigger that will always evaluate to false if the given controller or axis doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getAxisRawLessThan
      */
     public static Trigger getAxisRawLessThanTrigger(int controller, int axis, double val) {
         if(!axisCheck(controller, axis)) return new Trigger(() -> false);
@@ -536,11 +539,12 @@ public abstract class ControllerManager {
         return new Trigger(() -> controllers.get(controller).hid.getRawAxis(axis) < val);
     }
     /**
-     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getAxisLinearGreaterThan getAxisLinearGreaterThan}
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getAxisLinearGreaterThan}
      * @param controller ID of the registered controller
      * @param axis ID of the controller axis, starting at 0
      * @param val Discriminating value
      * @return Will return a Trigger that will always evaluate to false if the given controller or axis doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getAxisLinearGreaterThan
      */
     public static Trigger getAxisLinearGreaterThanTrigger(int controller, int axis, double val) {
         if(!axisCheck(controller, axis)) return new Trigger(() -> false);
@@ -549,11 +553,12 @@ public abstract class ControllerManager {
         return new Trigger(() -> applyLinearDeadzone(controllers.get(controller).hid.getRawAxis(axis), deadzone) > val);
     }
     /**
-     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getAxisLinearLessThan getAxisLinearLessThan}
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getAxisLinearLessThan}
      * @param controller ID of the registered controller
      * @param axis ID of the controller axis, starting at 0
      * @param val Discriminating value
      * @return Will return a Trigger that will always evaluate to false if the given controller or axis doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getAxisLinearLessThan
      */
     public static Trigger getAxisLinearLessThanTrigger(int controller, int axis, double val) {
         if(!axisCheck(controller, axis)) return new Trigger(() -> false);
@@ -562,12 +567,13 @@ public abstract class ControllerManager {
         return new Trigger(() -> applyLinearDeadzone(controllers.get(controller).hid.getRawAxis(axis), deadzone) < val);
     }
     /**
-     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getAxisExponentialGreaterThan getAxisExponentialGreaterThan}
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getAxisExponentialGreaterThan}
      * @param controller ID of the registered controller
      * @param axis ID of the controller axis, starting at 0
      * @param power What power of exponential curve to apply. Will be clamped to the range [0, ∞)
      * @param val Discriminating value
      * @return Will return a Trigger that will always evaluate to false if the given controller or axis doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getAxisExponentialGreaterThan
      */
     public static Trigger getAxisExponentialGreaterThanTrigger(int controller, int axis, double power, double val) {
         if(!axisCheck(controller, axis)) return new Trigger(() -> false);
@@ -576,12 +582,13 @@ public abstract class ControllerManager {
         return new Trigger(() -> applyExponentialDeadzone(controllers.get(controller).hid.getRawAxis(axis), deadzone, power) > val);
     }
     /**
-     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getAxisExponentialLessThan getAxisExponentialLessThan}
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getAxisExponentialLessThan}
      * @param controller ID of the registered controller
      * @param axis ID of the controller axis, starting at 0
      * @param power What power of exponential curve to apply. Will be clamped to the range [0, ∞)
      * @param val Discriminating value
      * @return Will return a Trigger that will always evaluate to false if the given controller or axis doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getAxisExponentialLessThan
      */
     public static Trigger getAxisExponentialLessThanTrigger(int controller, int axis, double power, double val) {
         if(!axisCheck(controller, axis)) return new Trigger(() -> false);
@@ -593,8 +600,8 @@ public abstract class ControllerManager {
     /**
      * Get the angle in degrees of the POV stick
      * @param controller ID of the registered controller
-     * @return the angle of the currently pressed pov button, -1 if none are pressed, and -2 if the given controller doesn't exist
-     * @see edu.wpi.first.wpilibj.GenericHID#getPOV GenericHID.getPOV
+     * @return the angle of the currently pressed pov button, -1 if it isn't pressed, and -2 if the given controller doesn't exist
+     * @see edu.wpi.first.wpilibj.GenericHID#getPOV
      */
     public static int getPOVAngle(int controller) {
         if(!povCheck(controller)) return -2;
@@ -612,6 +619,7 @@ public abstract class ControllerManager {
      * Test if the POV stick is currently pressed up
      * @param controller ID of the registered controller
      * @return Will return false if the given controller doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getPOVAngle
      */
     public static boolean getPOVUp(int controller) {
         return getPOVAngle(controller) == 0;
@@ -620,6 +628,7 @@ public abstract class ControllerManager {
      * Test if the POV stick is currently pressed diagonally to the upper right
      * @param controller ID of the registered controller
      * @return Will return false if the given controller doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getPOVAngle
      */
     public static boolean getPOVUpRight(int controller) {
         return getPOVAngle(controller) == 45;
@@ -628,6 +637,7 @@ public abstract class ControllerManager {
      * Test if the POV stick is currently pressed right
      * @param controller ID of the registered controller
      * @return Will return false if the given controller doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getPOVAngle
      */
     public static boolean getPOVRight(int controller) {
         return getPOVAngle(controller) == 90;
@@ -636,6 +646,7 @@ public abstract class ControllerManager {
      * Test if the POV stick is currently pressed diagonally to the lower right
      * @param controller ID of the registered controller
      * @return Will return false if the given controller doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getPOVAngle
      */
     public static boolean getPOVDownRight(int controller) {
         return getPOVAngle(controller) == 135;
@@ -644,6 +655,7 @@ public abstract class ControllerManager {
      * Test if the POV stick is currently pressed down
      * @param controller ID of the registered controller
      * @return Will return false if the given controller doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getPOVAngle
      */
     public static boolean getPOVDown(int controller) {
         return getPOVAngle(controller) == 180;
@@ -652,6 +664,7 @@ public abstract class ControllerManager {
      * Test if the POV stick is currently pressed diagonally to the lower left
      * @param controller ID of the registered controller
      * @return Will return false if the given controller doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getPOVAngle
      */
     public static boolean getPOVDownLeft(int controller) {
         return getPOVAngle(controller) == 225;
@@ -660,6 +673,7 @@ public abstract class ControllerManager {
      * Test if the POV stick is currently pressed left
      * @param controller ID of the registered controller
      * @return Will return false if the given controller doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getPOVAngle
      */
     public static boolean getPOVLeft(int controller) {
         return getPOVAngle(controller) == 270;
@@ -668,6 +682,7 @@ public abstract class ControllerManager {
      * Test if the POV stick is currently pressed diagonally to the upper left
      * @param controller ID of the registered controller
      * @return Will return false if the given controller doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getPOVAngle
      */
     public static boolean getPOVUpLeft(int controller) {
         return getPOVAngle(controller) == 315;
@@ -676,22 +691,27 @@ public abstract class ControllerManager {
      * Test if the POV stick is currently being pressed in any direction
      * @param controller ID of the registered controller
      * @return Will return false if the given controller doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getPOVAngle
      */
     public static boolean getPOVAny(int controller) {
+        if(!povCheck(controller)) return false;
+        
         return getPOVAngle(controller) != -1;
     }
     /**
      * Test if the POV stick isn't currently being pressed
      * @param controller ID of the registered controller
      * @return Will return true if the given controller doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getPOVAngle
      */
     public static boolean getPOVNone(int controller) {
         return getPOVAngle(controller) == -1;
     }
     /**
-     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVUp getPOVUp}
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVUp}
      * @param controller ID of the registered controller
      * @return Will return a Trigger that will always evaluate to false if the given controller doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getPOVUp
      */
     public static Trigger getPOVUpTrigger(int controller) {
         if(!povCheck(controller)) return new Trigger(() -> false);
@@ -699,9 +719,10 @@ public abstract class ControllerManager {
         return new Trigger(() -> controllers.get(controller).hid.getPOV() == 0);
     }
     /**
-     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVUpRight getPOVUpRight}
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVUpRight}
      * @param controller ID of the registered controller
      * @return Will return a Trigger that will always evaluate to false if the given controller doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getPOVUpRight
      */
     public static Trigger getPOVUpRightTrigger(int controller) {
         if(!povCheck(controller)) return new Trigger(() -> false);
@@ -709,9 +730,10 @@ public abstract class ControllerManager {
         return new Trigger(() -> controllers.get(controller).hid.getPOV() == 45);
     }
     /**
-     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVRight getPOVRight}
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVRight}
      * @param controller ID of the registered controller
      * @return Will return a Trigger that will always evaluate to false if the given controller doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getPOVRight
      */
     public static Trigger getPOVRightTrigger(int controller) {
         if(!povCheck(controller)) return new Trigger(() -> false);
@@ -719,9 +741,10 @@ public abstract class ControllerManager {
         return new Trigger(() -> controllers.get(controller).hid.getPOV() == 90);
     }
     /**
-     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVDownRight getPOVDownRight}
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVDownRight}
      * @param controller ID of the registered controller
      * @return Will return a Trigger that will always evaluate to false if the given controller doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getPOVDownRight
      */
     public static Trigger getPOVDownRightTrigger(int controller) {
         if(!povCheck(controller)) return new Trigger(() -> false);
@@ -729,9 +752,10 @@ public abstract class ControllerManager {
         return new Trigger(() -> controllers.get(controller).hid.getPOV() == 135);
     }
     /**
-     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVDown getPOVDown}
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVDown}
      * @param controller ID of the registered controller
      * @return Will return a Trigger that will always evaluate to false if the given controller doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getPOVDown
      */
     public static Trigger getPOVDownTrigger(int controller) {
         if(!povCheck(controller)) return new Trigger(() -> false);
@@ -739,9 +763,10 @@ public abstract class ControllerManager {
         return new Trigger(() -> controllers.get(controller).hid.getPOV() == 180);
     }
     /**
-     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVDownLeft getPOVDownLeft}
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVDownLeft}
      * @param controller ID of the registered controller
      * @return Will return a Trigger that will always evaluate to false if the given controller doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getPOVDownLeft
      */
     public static Trigger getPOVDownLeftTrigger(int controller) {
         if(!povCheck(controller)) return new Trigger(() -> false);
@@ -749,9 +774,10 @@ public abstract class ControllerManager {
         return new Trigger(() -> controllers.get(controller).hid.getPOV() == 225);
     }
     /**
-     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVLeft getPOVLeft}
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVLeft}
      * @param controller ID of the registered controller
      * @return Will return a Trigger that will always evaluate to false if the given controller doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getPOVLeft
      */
     public static Trigger getPOVLeftTrigger(int controller) {
         if(!povCheck(controller)) return new Trigger(() -> false);
@@ -759,9 +785,10 @@ public abstract class ControllerManager {
         return new Trigger(() -> controllers.get(controller).hid.getPOV() == 270);
     }
     /**
-     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVUpLeft getPOVUpLeft}
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVUpLeft}
      * @param controller ID of the registered controller
      * @return Will return a Trigger that will always evaluate to false if the given controller doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getPOVUpLeft
      */
     public static Trigger getPOVUpLeftTrigger(int controller) {
         if(!povCheck(controller)) return new Trigger(() -> false);
@@ -769,9 +796,10 @@ public abstract class ControllerManager {
         return new Trigger(() -> controllers.get(controller).hid.getPOV() == 315);
     }
     /**
-     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVAny getPOVAny}
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVAny}
      * @param controller ID of the registered controller
      * @return Will return a Trigger that will always evaluate to false if the given controller doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getPOVAny
      */
     public static Trigger getPOVAnyTrigger(int controller) {
         if(!povCheck(controller)) return new Trigger(() -> false);
@@ -779,9 +807,10 @@ public abstract class ControllerManager {
         return new Trigger(() -> controllers.get(controller).hid.getPOV() != -1);
     }
     /**
-     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVNone getPOVNone}
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVNone}
      * @param controller ID of the registered controller
      * @return Will return a Trigger that will always evaluate to true if the given controller doesn't exist
+     * @see frc.robot.controllers.ControllerManager#getPOVNone
      */
     public static Trigger getPOVNoneTrigger(int controller) {
         if(!povCheck(controller)) return new Trigger(() -> true);
@@ -796,6 +825,12 @@ public abstract class ControllerManager {
      * @param strength Magnitude of the rumble. Should be in the range of (0, 1], 1 being 100%. This value will be clamped within an acceptable range
      * @param duration How long this particular rumble should last. Should be in the range of (0, ∞)
      * @return Rumble ID. This can be used to cancel the rumble. This ID will be -1 if the given controller doesn't exist, -2 if an invalid rumble is created, and -3 if the rumble couldn't be made because the rumble limit has been reached
+     * @see frc.robot.controllers.ControllerManager#cancelRumble
+     * @see frc.robot.controllers.ControllerManager#cancelAllRumbles
+     * @see frc.robot.controllers.ControllerManager#rumbleEndTrigger
+     * @see frc.robot.controllers.ControllerManager#DEFAULT_RUMBLE_LIMIT
+     * @see frc.robot.controllers.ControllerManager#setRumbleLimit
+     * @see frc.robot.controllers.ControllerManager#getCurrentRumbleLimit
      */
     public static int scheduleRumble(int controller, RumbleType type, double strength, double duration) {
         if(!controllers.containsKey(controller)) {
@@ -853,7 +888,8 @@ public abstract class ControllerManager {
     /**
      * Cancel an already scheduled rumble
      * @param controller ID of the registered controller
-     * @param id Rumble ID returned by {@link frc.robot.controllers.ControllerManager#scheduleRumble scheduleRumble}
+     * @param id Rumble ID returned by {@link frc.robot.controllers.ControllerManager#scheduleRumble}
+     * @see frc.robot.controllers.ControllerManager#scheduleRumble
      */
     public static void cancelRumble(int controller, int id) {
         if(!controllers.containsKey(controller)) {
@@ -872,6 +908,7 @@ public abstract class ControllerManager {
     /**
      * Cancel all active rumbles on the controller
      * @param controller ID of the registered controller
+     * @see frc.robot.controllers.ControllerManager#scheduleRumble
      */
     public static void cancelAllRumbles(int controller) {
         if(!controllers.containsKey(controller)) {
@@ -888,8 +925,9 @@ public abstract class ControllerManager {
     /**
      * Check if a rumble ID is currently valid
      * @param controller ID of the registered controller
-     * @param id Rumble ID returned by {@link frc.robot.controllers.ControllerManager#scheduleRumble scheduleRumble}
+     * @param id Rumble ID returned by {@link frc.robot.controllers.ControllerManager#scheduleRumble}
      * @return Whether the ID is valid. Will return false if the given controller doesn't exist
+     * @see frc.robot.controllers.ControllerManager#scheduleRumble
      */
     public static boolean isRumbleIDValid(int controller, int id) {
         if(!controllers.containsKey(controller)) {
@@ -902,8 +940,10 @@ public abstract class ControllerManager {
     /**
      * Get a Trigger that returns true when the given rumble ID is no longer valid, i.e. when the rumble ends
      * @param controller ID of the registered controller
-     * @param id Rumble ID returned by {@link frc.robot.controllers.ControllerManager#scheduleRumble scheduleRumble}
+     * @param id Rumble ID returned by {@link frc.robot.controllers.ControllerManager#scheduleRumble}
      * @return Will return a Trigger that always evaluates to true if the given controller doesn't exist
+     * @see frc.robot.controllers.ControllerManager#scheduleRumble
+     * @see frc.robot.controllers.ControllerManager#isRumbleIDValid
      */
     public static Trigger rumbleEndTrigger(int controller, int id) {
         if(!controllers.containsKey(controller)) {
