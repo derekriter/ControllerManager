@@ -23,6 +23,7 @@ public abstract class ControllerManager {
         public Map<Integer, Boolean> buttonPressedBuffer = new HashMap<>();
         public Map<Integer, Boolean> buttonReleasedBuffer = new HashMap<>();
         public Map<Integer, Double> axisBuffer = new HashMap<>();
+        public int povBuffer = -2;
     }
     
     private static Map<Integer, Controller> controllers = new HashMap<>();
@@ -33,7 +34,7 @@ public abstract class ControllerManager {
      */
     public static void createController(int id) {
         if(controllers.containsKey(id)) {
-            DriverStation.reportError(String.format("Cannot create multiple controllers with id %d", id), true);
+            DriverStation.reportError(String.format("Cannot register multiple controllers with id %d", id), true);
             return;
         }
         if(id < 0) {
@@ -61,7 +62,7 @@ public abstract class ControllerManager {
         
         int id = hid.getPort();
         if(controllers.containsKey(id)) {
-            DriverStation.reportError(String.format("Cannot create multiple controllers with id %d", id), true);
+            DriverStation.reportError(String.format("Cannot register multiple controllers with id %d", id), true);
             return;
         }
         
@@ -80,7 +81,7 @@ public abstract class ControllerManager {
     /*
      * Internal tools
      */
-    private static boolean getButtonCheck(int controller, int button) {
+    private static boolean buttonCheck(int controller, int button) {
         if(!controllers.containsKey(controller)) {
             DriverStation.reportWarning(String.format("No controller with id %d has been registered", controller), false);
             return false;
@@ -97,7 +98,7 @@ public abstract class ControllerManager {
         }
         return true;
     }
-    private static boolean getAxisCheck(int controller, int axis) {
+    private static boolean axisCheck(int controller, int axis) {
         if(!controllers.containsKey(controller)) {
             DriverStation.reportWarning(String.format("No controller with id %d has been registered", controller), false);
             return false;
@@ -130,7 +131,7 @@ public abstract class ControllerManager {
         
         return Math.pow(Math.abs((val - (val > 0 ? deadzone : -deadzone)) / (1 - deadzone)), power) * (val < 0 ? -1 : 1);
     }
-    private static boolean getPOVCheck(int controller) {
+    private static boolean povCheck(int controller) {
         if(!controllers.containsKey(controller)) {
             DriverStation.reportWarning(String.format("No controller with id %d has been registered", controller), false);
             return false;
@@ -151,6 +152,7 @@ public abstract class ControllerManager {
             c.buttonPressedBuffer.clear();
             c.buttonReleasedBuffer.clear();
             c.axisBuffer.clear();
+            c.povBuffer = -2;
         }
     }
     /**
@@ -199,7 +201,7 @@ public abstract class ControllerManager {
      * @return Will return false if the given controller or button doesn't exist
      */
     public static boolean getButton(int controller, int button) {
-        if(!getButtonCheck(controller, button)) return false;
+        if(!buttonCheck(controller, button)) return false;
         
         Controller c = controllers.get(controller);
         if(c.buttonBuffer.containsKey(button)) {
@@ -217,7 +219,7 @@ public abstract class ControllerManager {
      * @return Will return false if the given controller or button doesn't exist
      */
     public static boolean getButtonPressed(int controller, int button) {
-        if(!getButtonCheck(controller, button)) return false;
+        if(!buttonCheck(controller, button)) return false;
         
         Controller c = controllers.get(controller);
         if(c.buttonPressedBuffer.containsKey(button)) {
@@ -235,7 +237,7 @@ public abstract class ControllerManager {
      * @return Will return false if the given controller or button doesn't exist
      */
     public static boolean getButtonReleased(int controller, int button) {
-        if(!getButtonCheck(controller, button)) return false;
+        if(!buttonCheck(controller, button)) return false;
         
         Controller c = controllers.get(controller);
         if(c.buttonReleasedBuffer.containsKey(button)) {
@@ -254,7 +256,7 @@ public abstract class ControllerManager {
      * @see https://github.com/wpilibsuite/allwpilib/issues/5903
      */
     public static Trigger getButtonTrigger(int controller, int button) {
-        if(!getButtonCheck(controller, button)) return new Trigger(() -> false);
+        if(!buttonCheck(controller, button)) return new Trigger(() -> false);
         
         //directly use getRawButton rather than getButton to prevent a bunch of unneccessary checks
         return new Trigger(() -> controllers.get(controller).hid.getRawButton(button));
@@ -267,7 +269,7 @@ public abstract class ControllerManager {
      * @return Will return 0 if the given controller or axis doesn't exist
      */
     public static double getAxisRaw(int controller, int axis) {
-        if(!getAxisCheck(controller, axis)) return 0;
+        if(!axisCheck(controller, axis)) return 0;
         
         Controller c = controllers.get(controller);
         if(c.axisBuffer.containsKey(axis)) {
@@ -286,7 +288,7 @@ public abstract class ControllerManager {
      * @see https://www.desmos.com/calculator/07bcdud2oy
      */
     public static double getAxisLinear(int controller, int axis) {
-        if(!getAxisCheck(controller, axis)) return 0;
+        if(!axisCheck(controller, axis)) return 0;
         
         Controller c = controllers.get(controller);
         double deadzone = c.axisDeadzones.getOrDefault(axis, 0d);
@@ -307,7 +309,7 @@ public abstract class ControllerManager {
      * @see https://www.desmos.com/calculator/07bcdud2oy
      */
     public static double getAxisExponential(int controller, int axis, double power) {
-        if(!getAxisCheck(controller, axis)) return 0;
+        if(!axisCheck(controller, axis)) return 0;
         
         if(power < 0) {
             DriverStation.reportWarning("Using a negative exponent on an axis will result in weird behaviour", false);
@@ -343,7 +345,7 @@ public abstract class ControllerManager {
      * @see frc.robot.controllers.ControllerManager#getAxisRaw getAxisRaw
      */
     public static boolean getAxisRawLessThan(int controller, int axis, double val) {
-        if(!getAxisCheck(controller, axis)) return false;
+        if(!axisCheck(controller, axis)) return false;
         
         return getAxisRaw(controller, axis) < val;
     }
@@ -367,7 +369,7 @@ public abstract class ControllerManager {
      * @see frc.robot.controllers.ControllerManager#getAxisLinear getAxisLinear
      */
     public static boolean getAxisLinearLessThan(int controller, int axis, double val) {
-        if(!getAxisCheck(controller, axis)) return false;
+        if(!axisCheck(controller, axis)) return false;
         
         return getAxisLinear(controller, axis) < val;
     }
@@ -393,7 +395,7 @@ public abstract class ControllerManager {
      * @see frc.robot.controllers.ControllerManager#getAxisExponential getAxisExponential
      */
     public static boolean getAxisExponentialLessThan(int controller, int axis, double power, double val) {
-        if(!getAxisCheck(controller, axis)) return false;
+        if(!axisCheck(controller, axis)) return false;
         
         return getAxisExponential(controller, axis, power) < val;
     }
@@ -405,7 +407,7 @@ public abstract class ControllerManager {
      * @return Will return a Trigger that will always evaluate to false if the given controller or axis doesn't exist
      */
     public static Trigger getAxisRawGreaterThanTrigger(int controller, int axis, double val) {
-        if(!getAxisCheck(controller, axis)) return new Trigger(() -> false);
+        if(!axisCheck(controller, axis)) return new Trigger(() -> false);
         
         return new Trigger(() -> controllers.get(controller).hid.getRawAxis(axis) > val);
     }
@@ -417,7 +419,7 @@ public abstract class ControllerManager {
      * @return Will return a Trigger that will always evaluate to false if the given controller or axis doesn't exist
      */
     public static Trigger getAxisRawLessThanTrigger(int controller, int axis, double val) {
-        if(!getAxisCheck(controller, axis)) return new Trigger(() -> false);
+        if(!axisCheck(controller, axis)) return new Trigger(() -> false);
         
         return new Trigger(() -> controllers.get(controller).hid.getRawAxis(axis) < val);
     }
@@ -429,7 +431,7 @@ public abstract class ControllerManager {
      * @return Will return a Trigger that will always evaluate to false if the given controller or axis doesn't exist
      */
     public static Trigger getAxisLinearGreaterThanTrigger(int controller, int axis, double val) {
-        if(!getAxisCheck(controller, axis)) return new Trigger(() -> false);
+        if(!axisCheck(controller, axis)) return new Trigger(() -> false);
         
         double deadzone = controllers.get(controller).axisDeadzones.getOrDefault(controller, 0d);
         return new Trigger(() -> applyLinearDeadzone(controllers.get(controller).hid.getRawAxis(axis), deadzone) > val);
@@ -442,7 +444,7 @@ public abstract class ControllerManager {
      * @return Will return a Trigger that will always evaluate to false if the given controller or axis doesn't exist
      */
     public static Trigger getAxisLinearLessThanTrigger(int controller, int axis, double val) {
-        if(!getAxisCheck(controller, axis)) return new Trigger(() -> false);
+        if(!axisCheck(controller, axis)) return new Trigger(() -> false);
         
         double deadzone = controllers.get(controller).axisDeadzones.getOrDefault(controller, 0d);
         return new Trigger(() -> applyLinearDeadzone(controllers.get(controller).hid.getRawAxis(axis), deadzone) < val);
@@ -456,7 +458,7 @@ public abstract class ControllerManager {
      * @return Will return a Trigger that will always evaluate to false if the given controller or axis doesn't exist
      */
     public static Trigger getAxisExponentialGreaterThanTrigger(int controller, int axis, double power, double val) {
-        if(!getAxisCheck(controller, axis)) return new Trigger(() -> false);
+        if(!axisCheck(controller, axis)) return new Trigger(() -> false);
         
         double deadzone = controllers.get(controller).axisDeadzones.getOrDefault(controller, 0d);
         return new Trigger(() -> applyExponentialDeadzone(controllers.get(controller).hid.getRawAxis(axis), deadzone, power) > val);
@@ -470,9 +472,208 @@ public abstract class ControllerManager {
      * @return Will return a Trigger that will always evaluate to false if the given controller or axis doesn't exist
      */
     public static Trigger getAxisExponentialLessThanTrigger(int controller, int axis, double power, double val) {
-        if(!getAxisCheck(controller, axis)) return new Trigger(() -> false);
+        if(!axisCheck(controller, axis)) return new Trigger(() -> false);
         
         double deadzone = controllers.get(controller).axisDeadzones.getOrDefault(controller, 0d);
         return new Trigger(() -> applyExponentialDeadzone(controllers.get(controller).hid.getRawAxis(axis), deadzone, power) < val);
+    }
+    
+    /**
+     * Get the angle of the POV stick
+     * @param controller ID of the registered controller
+     * @return the angle of the currently pressed pov button, -1 if none are pressed, and -2 if the given controller doesn't exist
+     * @see edu.wpi.first.wpilibj.GenericHID#getPOV GenericHID.getPOV
+     */
+    public static int getPOVAngle(int controller) {
+        if(!povCheck(controller)) return -2;
+        
+        Controller c = controllers.get(controller);
+        if(c.povBuffer != -2) {
+            return c.povBuffer;
+        }
+        
+        int val = controllers.get(controller).hid.getPOV();
+        c.povBuffer = val;
+        return val;
+    }
+    /**
+     * Test if the POV stick is currently pressed up
+     * @param controller ID of the registered controller
+     * @return Will return false if the given controller doesn't exist
+     */
+    public static boolean getPOVUp(int controller) {
+        return getPOVAngle(controller) == 0;
+    }
+    /**
+     * Test if the POV stick is currently pressed diagonally to the upper right
+     * @param controller ID of the registered controller
+     * @return Will return false if the given controller doesn't exist
+     */
+    public static boolean getPOVUpRight(int controller) {
+        return getPOVAngle(controller) == 45;
+    }
+    /**
+     * Test if the POV stick is currently pressed right
+     * @param controller ID of the registered controller
+     * @return Will return false if the given controller doesn't exist
+     */
+    public static boolean getPOVRight(int controller) {
+        return getPOVAngle(controller) == 90;
+    }
+    /**
+     * Test if the POV stick is currently pressed diagonally to the lower right
+     * @param controller ID of the registered controller
+     * @return Will return false if the given controller doesn't exist
+     */
+    public static boolean getPOVDownRight(int controller) {
+        return getPOVAngle(controller) == 135;
+    }
+    /**
+     * Test if the POV stick is currently pressed down
+     * @param controller ID of the registered controller
+     * @return Will return false if the given controller doesn't exist
+     */
+    public static boolean getPOVDown(int controller) {
+        return getPOVAngle(controller) == 180;
+    }
+    /**
+     * Test if the POV stick is currently pressed diagonally to the lower left
+     * @param controller ID of the registered controller
+     * @return Will return false if the given controller doesn't exist
+     */
+    public static boolean getPOVDownLeft(int controller) {
+        return getPOVAngle(controller) == 225;
+    }
+    /**
+     * Test if the POV stick is currently pressed left
+     * @param controller ID of the registered controller
+     * @return Will return false if the given controller doesn't exist
+     */
+    public static boolean getPOVLeft(int controller) {
+        return getPOVAngle(controller) == 270;
+    }
+    /**
+     * Test if the POV stick is currently pressed diagonally to the upper left
+     * @param controller ID of the registered controller
+     * @return Will return false if the given controller doesn't exist
+     */
+    public static boolean getPOVUpLeft(int controller) {
+        return getPOVAngle(controller) == 315;
+    }
+    /**
+     * Test if the POV stick is currently being pressed in any direction
+     * @param controller ID of the registered controller
+     * @return Will return false if the given controller doesn't exist
+     */
+    public static boolean getPOVAny(int controller) {
+        return getPOVAngle(controller) != -1;
+    }
+    /**
+     * Test if the POV stick isn't currently being pressed
+     * @param controller ID of the registered controller
+     * @return Will return true if the given controller doesn't exist
+     */
+    public static boolean getPOVNone(int controller) {
+        return getPOVAngle(controller) == -1;
+    }
+    /**
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVUp getPOVUp}
+     * @param controller ID of the registered controller
+     * @return Will return a Trigger that will always evaluate to false if the given controller doesn't exist
+     */
+    public static Trigger getPOVUpTrigger(int controller) {
+        if(!povCheck(controller)) return new Trigger(() -> false);
+        
+        return new Trigger(() -> controllers.get(controller).hid.getPOV() == 0);
+    }
+    /**
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVUpRight getPOVUpRight}
+     * @param controller ID of the registered controller
+     * @return Will return a Trigger that will always evaluate to false if the given controller doesn't exist
+     */
+    public static Trigger getPOVUpRightTrigger(int controller) {
+        if(!povCheck(controller)) return new Trigger(() -> false);
+        
+        return new Trigger(() -> controllers.get(controller).hid.getPOV() == 45);
+    }
+    /**
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVRight getPOVRight}
+     * @param controller ID of the registered controller
+     * @return Will return a Trigger that will always evaluate to false if the given controller doesn't exist
+     */
+    public static Trigger getPOVRightTrigger(int controller) {
+        if(!povCheck(controller)) return new Trigger(() -> false);
+        
+        return new Trigger(() -> controllers.get(controller).hid.getPOV() == 90);
+    }
+    /**
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVDownRight getPOVDownRight}
+     * @param controller ID of the registered controller
+     * @return Will return a Trigger that will always evaluate to false if the given controller doesn't exist
+     */
+    public static Trigger getPOVDownRightTrigger(int controller) {
+        if(!povCheck(controller)) return new Trigger(() -> false);
+        
+        return new Trigger(() -> controllers.get(controller).hid.getPOV() == 135);
+    }
+    /**
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVDown getPOVDown}
+     * @param controller ID of the registered controller
+     * @return Will return a Trigger that will always evaluate to false if the given controller doesn't exist
+     */
+    public static Trigger getPOVDownTrigger(int controller) {
+        if(!povCheck(controller)) return new Trigger(() -> false);
+        
+        return new Trigger(() -> controllers.get(controller).hid.getPOV() == 180);
+    }
+    /**
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVDownLeft getPOVDownLeft}
+     * @param controller ID of the registered controller
+     * @return Will return a Trigger that will always evaluate to false if the given controller doesn't exist
+     */
+    public static Trigger getPOVDownLeftTrigger(int controller) {
+        if(!povCheck(controller)) return new Trigger(() -> false);
+        
+        return new Trigger(() -> controllers.get(controller).hid.getPOV() == 225);
+    }
+    /**
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVLeft getPOVLeft}
+     * @param controller ID of the registered controller
+     * @return Will return a Trigger that will always evaluate to false if the given controller doesn't exist
+     */
+    public static Trigger getPOVLeftTrigger(int controller) {
+        if(!povCheck(controller)) return new Trigger(() -> false);
+        
+        return new Trigger(() -> controllers.get(controller).hid.getPOV() == 270);
+    }
+    /**
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVUpLeft getPOVUpLeft}
+     * @param controller ID of the registered controller
+     * @return Will return a Trigger that will always evaluate to false if the given controller doesn't exist
+     */
+    public static Trigger getPOVUpLeftTrigger(int controller) {
+        if(!povCheck(controller)) return new Trigger(() -> false);
+        
+        return new Trigger(() -> controllers.get(controller).hid.getPOV() == 315);
+    }
+    /**
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVAny getPOVAny}
+     * @param controller ID of the registered controller
+     * @return Will return a Trigger that will always evaluate to false if the given controller doesn't exist
+     */
+    public static Trigger getPOVAnyTrigger(int controller) {
+        if(!povCheck(controller)) return new Trigger(() -> false);
+        
+        return new Trigger(() -> controllers.get(controller).hid.getPOV() != -1);
+    }
+    /**
+     * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getPOVNone getPOVNone}
+     * @param controller ID of the registered controller
+     * @return Will return a Trigger that will always evaluate to true if the given controller doesn't exist
+     */
+    public static Trigger getPOVNoneTrigger(int controller) {
+        if(!povCheck(controller)) return new Trigger(() -> true);
+        
+        return new Trigger(() -> controllers.get(controller).hid.getPOV() == -1);
     }
 }
