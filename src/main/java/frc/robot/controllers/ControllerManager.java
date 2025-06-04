@@ -3,6 +3,7 @@ package frc.robot.controllers;
 import java.util.HashMap;
 import java.util.Map;
 
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.GenericHID;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
@@ -17,6 +18,7 @@ public abstract class ControllerManager {
      */
     private static class Controller {
         public GenericHID hid;
+        
         public Map<Integer, Double> axisDeadzones = new HashMap<>();
         
         public Map<Integer, Boolean> buttonBuffer = new HashMap<>();
@@ -24,13 +26,25 @@ public abstract class ControllerManager {
         public Map<Integer, Boolean> buttonReleasedBuffer = new HashMap<>();
         public Map<Integer, Double> axisBuffer = new HashMap<>();
         public int povBuffer = -2;
+        
+        public Map<Integer, Rumble> rumbles = new HashMap<>();
+        public double leftMax = 0;
+        public double rightMax = 0;
+    }
+    /**
+     * For internal use only
+     */
+    private static class Rumble {
+        public RumbleType type;
+        public double strength;
+        public double duration;
     }
     
     private static Map<Integer, Controller> controllers = new HashMap<>();
     
     /**
      * Create and register a HID device
-     * @param id Which port to connect the hid device to. Should be in the range of 0-5
+     * @param id Which port to connect the hid device to. Should be in the range of [0, 5]
      */
     public static void createController(int id) {
         if(controllers.containsKey(id)) {
@@ -75,7 +89,10 @@ public abstract class ControllerManager {
      * Critical to call in {@link frc.robot.Robot#robotPeriodic() robotPeriodic}
      */
     public static void periodic() {
-        forceClearBuffers();
+        for(int i = 0; i < controllers.values().size(); i++) {
+            forceClearBuffers(i);
+            updateRumble(i);
+        }
     }
     
     /*
@@ -118,7 +135,7 @@ public abstract class ControllerManager {
     /*
      * https://www.desmos.com/calculator/07bcdud2oy
      */
-    public static double applyLinearDeadzone(double val, double deadzone) {
+    private static double applyLinearDeadzone(double val, double deadzone) {
         if(-deadzone <= val && val <= deadzone) return 0;
         
         return (val - (val > 0 ? deadzone : -deadzone)) / (1 - deadzone);
@@ -126,7 +143,7 @@ public abstract class ControllerManager {
     /*
      * https://www.desmos.com/calculator/07bcdud2oy
      */
-    public static double applyExponentialDeadzone(double val, double deadzone, double power) {
+    private static double applyExponentialDeadzone(double val, double deadzone, double power) {
         if(-deadzone <= val && val <= deadzone) return 0;
         
         return Math.pow(Math.abs((val - (val > 0 ? deadzone : -deadzone)) / (1 - deadzone)), power) * (val < 0 ? -1 : 1);
@@ -144,37 +161,35 @@ public abstract class ControllerManager {
      * Setters
      */
     /**
-     * Forceable clear the input buffers. Doing so will cause the input to be requeried next time an input function is called. This is already called by {@link frc.robot.controllers.ControllerManager#periodic() periodic}. This should not need to be called manually under normal circumstances
+     * Forceable clear the input buffers of the given controller. Doing so will cause the input to be requeried next time an input function is called. This is already called by {@link frc.robot.controllers.ControllerManager#periodic() periodic}. This should not need to be called manually under normal circumstances
+     * @param controller ID of registered controller
      */
-    public static void forceClearBuffers() {
-        for(Controller c : controllers.values()) {
-            c.buttonBuffer.clear();
-            c.buttonPressedBuffer.clear();
-            c.buttonReleasedBuffer.clear();
-            c.axisBuffer.clear();
-            c.povBuffer = -2;
+    public static void forceClearBuffers(int controller) {
+        if(!controllers.containsKey(controller)) {
+            DriverStation.reportWarning(String.format("No controller with id %d has been registered", controller), false);
+            return;
         }
+        
+        Controller c = controllers.get(controller);
+        c.buttonBuffer.clear();
+        c.buttonPressedBuffer.clear();
+        c.buttonReleasedBuffer.clear();
+        c.axisBuffer.clear();
+        c.povBuffer = -2;
     }
     /**
      * Configure the deadzone for the given controller and axis. This deadzone is used when calling {@link frc.robot.controllers.ControllerManager#getAxisLinear getAxisLinear} and {@link frc.robot.controllers.ControllerManager#getAxisExponential(int, int, double) getAxisExponential}
      * @param controller ID of registered controller
      * @param axis ID of controller axis, starting at 0
-     * @param deadzone The range in which if the absolute value of the axis is <= the deadzone, then it will equal 0
+     * @param deadzone The range in which if the absolute value of the axis is <= the deadzone, then it will equal 0. This value is clamped to the range [0, 1]
      */
     public static void setControllerAxisDeadzone(int controller, int axis, double deadzone) {
         if(!controllers.containsKey(controller)) {
             DriverStation.reportError(String.format("No controller with id %d has been registered", controller), false);
             return;
         }
-        if(deadzone < 0) {
-            DriverStation.reportError(String.format("Cannot apply negative deadzone to axis %d of controller %d", axis, controller), false);
-            return;
-        }
-        if(deadzone >= 1) {
-            DriverStation.reportWarning(String.format("A deadzone of >= 1 on axis %d of controller %d will disable that axis", axis, controller), false);
-        }
         
-        controllers.get(controller).axisDeadzones.put(axis, deadzone);
+        controllers.get(controller).axisDeadzones.put(axis, MathUtil.clamp(deadzone, 0, 1));
     }
     
     /*
@@ -304,19 +319,16 @@ public abstract class ControllerManager {
      * Get the axis value with the configured axis deadzone and apply an exponential curve to it
      * @param controller ID of registered controller
      * @param axis ID of controller axis, starting at 0
-     * @param power What power of exponential curve to apply. See variable <i>s</i> in the example graph
+     * @param power What power of exponent to apply. Will be clamped to the range [0, ∞) See variable <i>s</i> in the example graph
      * @return Will return 0 if the given controller or axis doesn't exist
      * @see https://www.desmos.com/calculator/07bcdud2oy
      */
     public static double getAxisExponential(int controller, int axis, double power) {
         if(!axisCheck(controller, axis)) return 0;
         
-        if(power < 0) {
-            DriverStation.reportWarning("Using a negative exponent on an axis will result in weird behaviour", false);
-        }
-        
         Controller c = controllers.get(controller);
         double deadzone = c.axisDeadzones.getOrDefault(axis, 0d);
+        power = Math.max(power, 0);
         if(c.axisBuffer.containsKey(axis)) {
             return applyExponentialDeadzone(c.axisBuffer.get(axis), deadzone, power);
         }
@@ -453,7 +465,7 @@ public abstract class ControllerManager {
      * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getAxisExponentialGreaterThan getAxisExponentialGreaterThan}
      * @param controller ID of the registered controller
      * @param axis ID of the controller axis, starting at 0
-     * @param power What power of exponential curve to apply
+     * @param power What power of exponential curve to apply. Will be clamped to the range [0, ∞)
      * @param val Discriminating value
      * @return Will return a Trigger that will always evaluate to false if the given controller or axis doesn't exist
      */
@@ -467,7 +479,7 @@ public abstract class ControllerManager {
      * Get a trigger that tracks the value of {@link frc.robot.controllers.ControllerManager#getAxisExponentialLessThan getAxisExponentialLessThan}
      * @param controller ID of the registered controller
      * @param axis ID of the controller axis, starting at 0
-     * @param power What power of exponential curve to apply
+     * @param power What power of exponential curve to apply. Will be clamped to the range [0, ∞)
      * @param val Discriminating value
      * @return Will return a Trigger that will always evaluate to false if the given controller or axis doesn't exist
      */
@@ -675,5 +687,128 @@ public abstract class ControllerManager {
         if(!povCheck(controller)) return new Trigger(() -> true);
         
         return new Trigger(() -> controllers.get(controller).hid.getPOV() == -1);
+    }
+
+    /**
+     * Schedule a controller rumble. ControllerManager will handle having multiple run at the same time by choosing the rumble that has the highest strength to run on the controller
+     * @param controller ID of the registered controller
+     * @param type Whether to activate the left, right, or both rumble motors
+     * @param strength Magnitude of the rumble. Should be in the range of (0, 1], 1 being 100%. This value will be clamped within an acceptable range
+     * @param duration How long this particular rumble should last. Should be in the range of (0, ∞)
+     * @return Rumble ID. This can be used to cancel the rumble. This ID will be -1 if the given controller doesn't exist or if an invalid rumble is created
+     */
+    public static int scheduleRumble(int controller, RumbleType type, double strength, double duration) {
+        if(!controllers.containsKey(controller)) {
+            DriverStation.reportError(String.format("No controller with id %d has been registered", controller), false);
+            return -1;
+        }
+        
+        strength = Math.min(strength, 1);
+        if(strength <= 0) {
+            return -1; //return quietly
+        }
+        if(duration <= 0) {
+            return -1; //return quietly
+        }
+        
+        Controller c = controllers.get(controller);
+        
+        //probably could be better but it works
+        //will get super slow if a ton of rumbles are active
+        //also will break if 2147483647 rumbles are already active
+        int id;
+        do {
+            id = (int) (Math.random() * Integer.MAX_VALUE);
+        }
+        while(c.rumbles.keySet().contains(id));
+        
+        Rumble r = new Rumble();
+        r.type = type;
+        r.strength = strength;
+        r.duration = duration;
+        
+        c.rumbles.put(id, r);
+        
+        switch(type) {
+            case LEFT:
+                c.leftMax = Math.max(c.leftMax, strength);
+                c.hid.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kLeftRumble, c.leftMax);
+                break;
+            case RIGHT:
+                c.rightMax = Math.max(c.rightMax, strength);
+                c.hid.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kRightRumble, c.rightMax);
+                break;
+            case BOTH:
+                c.leftMax = Math.max(c.leftMax, strength);
+                c.rightMax = Math.max(c.rightMax, strength);
+                c.hid.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kLeftRumble, c.leftMax);
+                c.hid.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kRightRumble, c.rightMax);
+                break;
+        }
+        
+        return id;
+    }
+    /**
+     * Cancel an already scheduled rumble
+     * @param controller ID of the registered controller
+     * @param id Rumble ID returned by {@link frc.robot.controllers.ControllerManager#scheduleRumble scheduleRumble}
+     */
+    public static void cancelRumble(int controller, int id) {
+        if(!controllers.containsKey(controller)) {
+            DriverStation.reportError(String.format("No controller with id %d has been registered", controller), false);
+            return;
+        }
+        
+        Controller c = controllers.get(controller);
+        if(!c.rumbles.containsKey(id)) {
+            DriverStation.reportError(String.format("No rumble with id %d is currently registered for controller %d", id, controller), false);
+            return;
+        }
+        
+        c.rumbles.remove(id);
+    }
+    /**
+     * Cancel all active rumbles on the controller
+     * @param controller ID of the registered controller
+     */
+    public static void cancelAllRumbles(int controller) {
+        if(!controllers.containsKey(controller)) {
+            DriverStation.reportError(String.format("No controller with id %d has been registered", controller), false);
+            return;
+        }
+        
+        Controller c = controllers.get(controller);
+        c.rumbles.clear();
+        c.leftMax = 0;
+        c.rightMax = 0;
+        c.hid.setRumble(edu.wpi.first.wpilibj.GenericHID.RumbleType.kBothRumble, 0);
+    }
+    /**
+     * Check if a rumble ID is currently valid
+     * @param controller ID of the registered controller
+     * @param id Rumble ID returned by {@link frc.robot.controllers.ControllerManager#scheduleRumble scheduleRumble}
+     * @return Whether the ID is valid. Will return false if the given controller doesn't exist
+     */
+    public static boolean isRumbleIDValid(int controller, int id) {
+        if(!controllers.containsKey(controller)) {
+            DriverStation.reportError(String.format("No controller with id %d has been registered", controller), false);
+            return false;
+        }
+        
+        return controllers.get(controller).rumbles.containsKey(id);
+    }
+    /**
+     * Get a Trigger that returns true when the given rumble ID is no longer valid, i.e. when the rumble ends
+     * @param controller ID of the registered controller
+     * @param id Rumble ID returned by {@link frc.robot.controllers.ControllerManager#scheduleRumble scheduleRumble}
+     * @return Will return a Trigger that always evaluates to true if the given controller doesn't exist
+     */
+    public static Trigger rumbleEndTrigger(int controller, int id) {
+        if(!controllers.containsKey(controller)) {
+            DriverStation.reportError(String.format("No controller with id %d has been registered", controller), false);
+            return new Trigger(() -> true);
+        }
+        
+        return new Trigger(() -> !controllers.get(controller).rumbles.containsKey(id));
     }
 }
