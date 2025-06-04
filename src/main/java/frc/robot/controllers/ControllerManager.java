@@ -23,6 +23,19 @@ import frc.robot.Robot;
 public abstract class ControllerManager {
     
     /**
+     * The default number of rumbles that are allowed to be active at once per controller
+     * @see frc.robot.controllers.ControllerManager#setRumbleLimit
+     * @see frc.robot.controllers.ControllerManager#MAX_RUMBLE_LIMIT
+     */
+    public static final int DEFAULT_RUMBLE_LIMIT = 10;
+    /**
+     * Max value for the rumble limit
+     * @see frc.robot.controllers.ControllerManager#DEFAULT_RUMBLE_LIMIT
+     * @see frc.robot.controllers.ControllerManager#setRumbleLimit
+     */
+    public static final int MAX_RUMBLE_LIMIT = 30;
+    
+    /**
      * For internal use only
      */
     private static class Controller {
@@ -52,6 +65,7 @@ public abstract class ControllerManager {
     
     private static Map<Integer, Controller> controllers = new HashMap<>();
     private static boolean hasInited = false;
+    private static int rumbleLimit = DEFAULT_RUMBLE_LIMIT;
     
     /**
      * Create and register a HID device
@@ -109,6 +123,9 @@ public abstract class ControllerManager {
      */
     private static void init() {
         hasInited = true;
+        
+        //maybe shouldn't be assert, IDK
+        assert DEFAULT_RUMBLE_LIMIT <= MAX_RUMBLE_LIMIT;
         
         //run periodic at 50 Hz, same cycle as robotPeriodic
         Robot.instance.addPeriodic(ControllerManager::periodic, Robot.kDefaultPeriod);
@@ -256,6 +273,16 @@ public abstract class ControllerManager {
         
         controllers.get(controller).axisDeadzones.put(axis, MathUtil.clamp(deadzone, 0, 1));
     }
+    /**
+     * This will configure how many scheduled rumbles ControllerManager will allow to be active at once on a per-controller basis. This defaults to {@link frc.robot.controllers.ControllerManager#DEFAULT_RUMBLE_LIMIT}. The rumble limit only affects newly scheduled rumbles, meaing decreasing this value below what is currently active will not cancel any rumbles. e.g. If 15 rumbles are currently active and you set the rumble limit to 10, then the extra 5 will continue to operate normally, as they were scheduled before the limit was decreased
+     * @param maxRumbles Maximum amount of rumbles allowed to be active at once per controller. This value will be clamped to the range [0, {@link frc.robot.controllers.ControllerManager#MAX_RUMBLE_LIMIT}]
+     * @see frc.robot.controllers.ControllerManager#DEFAULT_RUMBLE_LIMIT
+     * @see frc.robot.controllers.ControllerManager#MAX_RUMBLE_LIMIT
+     * @see frc.robot.controllers.ControllerManager#getCurrentRumbleLimit
+     */
+    public static void setRumbleLimit(int maxRumbles) {
+        rumbleLimit = MathUtil.clamp(maxRumbles, 0, MAX_RUMBLE_LIMIT);
+    }
     
     /*
      * Getters
@@ -272,6 +299,14 @@ public abstract class ControllerManager {
         }
         
         return controllers.get(controller).hid;
+    }
+    /**
+     * Get the currently configured maximum rumbles. This will default to {@link frc.robot.controllers.ControllerManager#DEFAULT_RUMBLE_LIMIT ControllerManager.DEFAULT_RUMBLE_LIMIT}
+     * @see frc.robot.controllers.ControllerManager#DEFAULT_RUMBLE_LIMIT ControllerManager.DEFAULT_RUMBLE_LIMIT
+     * @see frc.robot.controllers.ControllerManager#setRumbleLimit ControllerManager.setRumbleLimit
+     */
+    public static int getCurrentRumbleLimit() {
+        return rumbleLimit;
     }
     
     /**
@@ -556,7 +591,7 @@ public abstract class ControllerManager {
     }
     
     /**
-     * Get the angle of the POV stick
+     * Get the angle in degrees of the POV stick
      * @param controller ID of the registered controller
      * @return the angle of the currently pressed pov button, -1 if none are pressed, and -2 if the given controller doesn't exist
      * @see edu.wpi.first.wpilibj.GenericHID#getPOV GenericHID.getPOV
@@ -760,7 +795,7 @@ public abstract class ControllerManager {
      * @param type Whether to activate the left, right, or both rumble motors
      * @param strength Magnitude of the rumble. Should be in the range of (0, 1], 1 being 100%. This value will be clamped within an acceptable range
      * @param duration How long this particular rumble should last. Should be in the range of (0, ∞)
-     * @return Rumble ID. This can be used to cancel the rumble. This ID will be -1 if the given controller doesn't exist or if an invalid rumble is created
+     * @return Rumble ID. This can be used to cancel the rumble. This ID will be -1 if the given controller doesn't exist, -2 if an invalid rumble is created, and -3 if the rumble couldn't be made because the rumble limit has been reached
      */
     public static int scheduleRumble(int controller, RumbleType type, double strength, double duration) {
         if(!controllers.containsKey(controller)) {
@@ -770,17 +805,17 @@ public abstract class ControllerManager {
         
         strength = Math.min(strength, 1);
         if(strength <= 0) {
-            return -1; //return quietly
+            return -2; //return quietly
         }
         if(duration <= 0) {
-            return -1; //return quietly
+            return -2; //return quietly
         }
         
         Controller c = controllers.get(controller);
         
+        if(c.rumbles.size() == rumbleLimit) return -3;
+        
         //probably could be better but it works
-        //will get super slow if a ton of rumbles are active -> TODO add a limit on how many rumbles can be active at a time per controller, how to handle limit (either cancel old rumbles or cancel incoming)
-        //also will break if 2147483647 rumbles are already active when scheduling a new one
         int id;
         do {
             id = (int) (Math.random() * Integer.MAX_VALUE);
