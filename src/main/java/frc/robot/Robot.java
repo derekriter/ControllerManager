@@ -12,7 +12,7 @@ public class Robot extends TimedRobot {
     private final RobotContainer robotContainer;
     
     public Robot() {
-        robotContainer = new RobotContainer();
+        robotContainer = new RobotContainer(this);
     }
     
     @Override

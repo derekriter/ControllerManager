@@ -5,13 +5,20 @@
 package frc.robot;
 
 import edu.wpi.first.wpilibj.DriverStation;
-import frc.robot.controllers.ControllerManager;
+import frc.robot.controllers.BasicController;
+import frc.robot.controllers.GenericXboxController;
 
 public class RobotContainer {
     
-    public RobotContainer() {
+    private final Robot robot;
+    private final BasicController driver1;
+    private final GenericXboxController driver2;
+    
+    public RobotContainer(Robot _robot) {
+        robot = _robot;
+        
         DriverStation.silenceJoystickConnectionWarning(true);
-        ControllerManager.registerController(0); //driver 1
-        ControllerManager.registerController(1); //driver 2
+        driver1 = new BasicController(0, robot);
+        driver2 = new GenericXboxController(1, robot);
     }
 }
