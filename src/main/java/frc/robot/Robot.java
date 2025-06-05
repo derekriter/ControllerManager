@@ -9,13 +9,9 @@ import edu.wpi.first.wpilibj2.command.CommandScheduler;
 
 public class Robot extends TimedRobot {
     
-    public static Robot instance;
-    
     private final RobotContainer robotContainer;
     
     public Robot() {
-        instance = this;
-        
         robotContainer = new RobotContainer();
     }
     
