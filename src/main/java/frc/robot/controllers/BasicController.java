@@ -12,7 +12,6 @@ import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 
 /*
- * TODO Rewrite to use controller classes rather than just one big abstract class
  * TODO Javadocs on github?
  */
 /**
