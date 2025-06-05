@@ -11,7 +11,7 @@ public class RobotContainer {
     
     public RobotContainer() {
         DriverStation.silenceJoystickConnectionWarning(true);
-        ControllerManager.createController(0); //driver 1
-        ControllerManager.createController(1); //driver 2
+        ControllerManager.registerController(0); //driver 1
+        ControllerManager.registerController(1); //driver 2
     }
 }
