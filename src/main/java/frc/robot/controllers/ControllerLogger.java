@@ -30,8 +30,8 @@ public abstract class ControllerLogger {
     static void errorNullArgument(String valName) throws IllegalArgumentException {
         throw new IllegalArgumentException(String.format("%sArgument '%s' cannot be null", PREFIX, valName));
     }
-    static void errorInvalidRumble(int controller, int rumble) throws IllegalArgumentException {
-        throw new IllegalArgumentException(String.format("%sNo rumble with id %d is currently active on controller %d", PREFIX, rumble, controller));
+    static void errorInvalidRumble(int port, int rumble) throws IllegalArgumentException {
+        throw new IllegalArgumentException(String.format("%sNo rumble with id %d is currently active on controller %d", PREFIX, rumble, port));
     }
     
     /*

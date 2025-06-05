@@ -666,7 +666,7 @@ public class BasicController {
      * @see frc.robot.controllers.BasicController#setRumbleLimit
      * @see frc.robot.controllers.BasicController#getCurrentRumbleLimit
      */
-    public int scheduleRumble(int controller, RumbleType type, double strength, double duration) {
+    public int scheduleRumble(RumbleType type, double strength, double duration) {
         double clampedStrength = MathUtil.clamp(strength, Double.MIN_NORMAL, 1);
         if(clampedStrength != strength) {
             ControllerLogger.warningClamp("strength", strength, "(0, 1]");
@@ -723,9 +723,9 @@ public class BasicController {
      * @see frc.robot.controllers.BasicController#scheduleRumble
      * @see frc.robot.controllers.BasicController#isRumbleIDValid
      */
-    public void cancelRumble(int controller, int rumble) throws IllegalAccessException {
+    public void cancelRumble(int rumble) throws IllegalAccessException {
         if(!rumbles.containsKey(rumble)) {
-            ControllerLogger.errorInvalidRumble(controller, rumble);
+            ControllerLogger.errorInvalidRumble(getPort(), rumble);
         }
         
         rumbles.remove(rumble);
@@ -735,7 +735,7 @@ public class BasicController {
      * Cancel all active rumbles on the controller
      * @see frc.robot.controllers.BasicController#scheduleRumble
      */
-    public void cancelAllRumbles(int controller) {
+    public void cancelAllRumbles() {
         rumbles.clear();
         leftMax = 0;
         rightMax = 0;
